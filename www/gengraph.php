@@ -145,6 +145,8 @@ foreach ($asns as $as) {
 foreach ($knownlinks as $link) {
 	/* generate graph area/stack for inbound */
 	foreach ($asns as $as) {
+		if (!isset($inDEF[$link['tag'] . '_' . $as])) { continue; }
+
 		if ($outispositive && $brighten_negative)
 			$col = $link['color'] . "BB";
 		else
@@ -163,6 +165,8 @@ foreach ($knownlinks as $link) {
 
 	/* generate graph area/stack for outbound */
 	foreach ($asns as $as) {
+		if (!isset($outDEF[$link['tag'] . '_' . $as])) { continue; }
+
 		if ($outispositive || !$brighten_negative)
 			$col = $link['color'];
 		else
