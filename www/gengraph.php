@@ -91,58 +91,60 @@ $tot_out_bits = "CDEF:tot_out_bits=0";
 $firstLegend = true;
 $inArea = $outArea = $count = 0;
 
+$inDEF = array();
+$outDEF = array();
+
 foreach ($asns as $as) {
 	$rrdfile = getRRDFileForAS($as, $peerusage);
 	if (!file_exists($rrdfile)) { continue; }
 	$count++;
 
-	$inDEF = array();
-	$outDEF = array();
-
 	foreach ($knownlinks as $link) {
-		$inDEF[$link['tag'] . '_' . $v6_el] = "l" . crc32("{$link['tag']}_{$v6_el}_{$as}_in");
-		$outDEF[$link['tag'] . '_' . $v6_el] = "l" . crc32("{$link['tag']}_{$v6_el}_{$as}_out");
+		$inDEF[$link['tag'] . '_' . $as] = "l" . crc32("{$link['tag']}_{$v6_el}_{$as}_in");
+		$outDEF[$link['tag'] . '_' . $as] = "l" . crc32("{$link['tag']}_{$v6_el}_{$as}_out");
 	}
 
 	/* geneate RRD DEFs */
 	foreach ($knownlinks as $link) {
-		$data .= "DEF:{$inDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}in:AVERAGE ";
-		$data .= "DEF:{$outDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}out:AVERAGE ";
+		$data .= "DEF:{$inDEF[$link['tag'] . '_' . $as]}=\"$rrdfile\":{$link['tag']}_{$v6_el}in:AVERAGE ";
+		$data .= "DEF:{$outDEF[$link['tag'] . '_' . $as]}=\"$rrdfile\":{$link['tag']}_{$v6_el}out:AVERAGE ";
 	}
 
 	if ($compat_rrdtool12) {
 		/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
 		foreach ($knownlinks as $link) {
 		   if ($outispositive) {
-				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
-				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $as]}_bits={$inDEF[$link['tag'] . '_' . $as]},-8,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $as]}_bits={$outDEF[$link['tag'] . '_' . $as]},8,* ";
 			} else {
-				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
-				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $as]}_bits={$inDEF[$link['tag'] . '_' . $as]},8,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $as]}_bits={$outDEF[$link['tag'] . '_' . $as]},-8,* ";
 			}
 		}
 	} else {
 		/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
 		foreach ($knownlinks as $link) {
-			$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
-			$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
-			$tot_in_bits .= ",{$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,ADDNAN";
-			$tot_out_bits .= ",{$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,ADDNAN";
+			$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $as]}_bits_pos={$inDEF[$link['tag'] . '_' . $as]},8,* ";
+			$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $as]}_bits_pos={$outDEF[$link['tag'] . '_' . $as]},8,* ";
+			$tot_in_bits .= ",{$inDEF[$link['tag'] . '_' . $as]}_bits_pos,ADDNAN";
+			$tot_out_bits .= ",{$outDEF[$link['tag'] . '_' . $as]}_bits_pos,ADDNAN";
 		}
 
 		foreach ($knownlinks as $link) {
 			if ($outispositive) {
-				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
-				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $as]}_bits={$inDEF[$link['tag'] . '_' . $as]}_bits_pos,-1,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $as]}_bits={$outDEF[$link['tag'] . '_' . $as]}_bits_pos,1,* ";
 			} else {
-				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
-				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $as]}_bits={$outDEF[$link['tag'] . '_' . $as]}_bits_pos,-1,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $as]}_bits={$inDEF[$link['tag'] . '_' . $as]}_bits_pos,1,* ";
 			}
 		}
 	}
+}
 
+foreach ($knownlinks as $link) {
 	/* generate graph area/stack for inbound */
-	foreach ($knownlinks as $link) {
+	foreach ($asns as $as) {
 		if ($outispositive && $brighten_negative)
 			$col = $link['color'] . "BB";
 		else
@@ -152,7 +154,7 @@ foreach ($asns as $as) {
 		} else {
 			$descr = '';
 		}
-		$instack .= "AREA:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:\"{$descr}\"";
+		$instack .= "AREA:{$inDEF[$link['tag'] . '_' . $as]}_bits#{$col}:\"{$descr}\"";
 		if ($inArea++ > 0)
 			$instack .= ":STACK";
 		$instack .= " ";
@@ -160,12 +162,12 @@ foreach ($asns as $as) {
 	$firstLegend = false;
 
 	/* generate graph area/stack for outbound */
-	foreach ($knownlinks as $link) {
+	foreach ($asns as $as) {
 		if ($outispositive || !$brighten_negative)
 			$col = $link['color'];
 		else
 			$col = $link['color'] . "BB";
-		$outstack .= "AREA:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:";
+		$outstack .= "AREA:{$outDEF[$link['tag'] . '_' . $as]}_bits#{$col}:";
 		if ($outArea++ > 0)
 			$outstack .= ":STACK";
 		$outstack .= " ";
