@@ -16,7 +16,7 @@ if (isset($_GET['asset'])) {
         if ($aslist[0]) {
                 foreach ($aslist as $as) {
                         $as_tmp = substr($as, 2);
-                        if (is_numeric($as_tmp)) {
+                        if (is_numeric($as_tmp) && $as_tmp > 0) {
                                 $asns[] = $as_tmp;
                         }
                 }

@@ -52,7 +52,7 @@ if ( $action == "clearall" ) {
 		if ($aslist[0]):
 			foreach( $aslist as $as ):
 				$as_tmp = substr($as, 2);
-				if (is_numeric($as_tmp)):
+				if (is_numeric($as_tmp) && $as_tmp > 0):
 					$as_num[]=$as_tmp;
 				else:
 					$as_other[]=$as;
