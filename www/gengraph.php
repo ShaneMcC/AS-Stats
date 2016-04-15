@@ -88,7 +88,6 @@ $instack = '';
 $outstack = '';
 $tot_in_bits = "CDEF:tot_in_bits=0";
 $tot_out_bits = "CDEF:tot_out_bits=0";
-$firstLegend = true;
 $inArea = $outArea = $count = 0;
 
 $inDEF = array();
@@ -142,6 +141,7 @@ foreach ($asns as $as) {
 	}
 }
 
+$hasLegend = array();
 foreach ($knownlinks as $link) {
 	/* generate graph area/stack for inbound */
 	foreach ($asns as $as) {
@@ -151,8 +151,9 @@ foreach ($knownlinks as $link) {
 			$col = $link['color'] . "BB";
 		else
 			$col = $link['color'];
-		if ($firstLegend) {
+		if (!isset($hasLegend[$link['descr']])) {
 			$descr = str_replace(':', '\:', $link['descr']); # Escaping colons in description
+			$hasLegend[$link['descr']] = true;
 		} else {
 			$descr = '';
 		}
@@ -161,7 +162,6 @@ foreach ($knownlinks as $link) {
 			$instack .= ":STACK";
 		$instack .= " ";
 	}
-	$firstLegend = false;
 
 	/* generate graph area/stack for outbound */
 	foreach ($asns as $as) {
