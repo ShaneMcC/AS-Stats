@@ -7,11 +7,28 @@
 
 require_once('func.inc');
 
-$as = $_GET['as'];
-if (!preg_match("/^[0-9a-zA-Z]+$/", $as))
-	die("Invalid AS");
+$asns = array();
+if (isset($_GET['asset'])) {
+	$asset = strtoupper($_GET['asset']);
+	$aslist = getASSET($asset);
+	if ($aslist[0]) {
+		foreach ($aslist as $as) {
+                	$as_tmp = substr($as, 2);
+			if (is_numeric($as_tmp)) {
+				$asns[] = $as_tmp;
+			}
+		}
+	}
+} else if (isset($_GET['as'])) {
+	$asns = explode(',', $_GET['as']);
+} else {
+	die('No AS Given.');
+}
 
-header("Content-Type: image/png");
+foreach ($asns as $asn)
+	if (!preg_match("/^[0-9a-zA-Z]+$/", $asn))
+		die("Invalid AS");
+
 
 $width = $default_graph_width;
 $height = $default_graph_height;
@@ -29,7 +46,6 @@ else
 	$peerusage = 0;
 
 $knownlinks = getknownlinks();
-$rrdfile = getRRDFileForAS($as, $peerusage);
 
 if ($compat_rrdtool12) {
 	/* cannot use full-size-mode - must estimate height/width */
@@ -39,129 +55,174 @@ if ($compat_rrdtool12) {
 		$width -= 16;
 }
 
-$cmd = "$rrdtool graph - " .
+$data = array();
+$data[] = "graph - " .
 	"--slope-mode --alt-autoscale -u 0 -l 0 --imgformat=PNG --base=1000 --height=$height --width=$width " .
 	"--color BACK#ffffff00 --color SHADEA#ffffff00 --color SHADEB#ffffff00 ";
 
 if (!$compat_rrdtool12)
-	$cmd .= "--full-size-mode ";
+	$data[] = "--full-size-mode ";
 
 if ($vertical_label) {
 	if($outispositive)
-		$cmd .= "--vertical-label '<- IN | OUT ->' ";
+		$data[] = "--vertical-label '<- IN | OUT ->' ";
 	else
-		$cmd .= "--vertical-label '<- OUT | IN ->' ";
+		$data[] = "--vertical-label '<- OUT | IN ->' ";
 }
 
 if($showtitledetail && @$_GET['dname'] != "")
-	$cmd .= "--title " . escapeshellarg($_GET['dname']) . " ";
+	$data[] = "--title " . escapeshellarg($_GET['dname']) . " ";
 else
 	if (isset($_GET['v']) && is_numeric($_GET['v']))
-		$cmd .= "--title IPv" . $_GET['v'] . " ";
+		$data[] = "--title IPv" . $_GET['v'] . " ";
 
 if (isset($_GET['nolegend']))
-	$cmd .= "--no-legend ";
+	$data[] = "--no-legend ";
 
 if (isset($_GET['start']) && is_numeric($_GET['start']))
-	$cmd .= "--start " . $_GET['start'] . " ";
+	$data[] = "--start " . $_GET['start'] . " ";
 
 if (isset($_GET['end']) && is_numeric($_GET['end']))
-	$cmd .= "--end " . $_GET['end'] . " ";
+	$data[] = "--end " . $_GET['end'] . " ";
 
-/* geneate RRD DEFs */
-foreach ($knownlinks as $link) {
-	$cmd .= "DEF:{$link['tag']}_{$v6_el}in=\"$rrdfile\":{$link['tag']}_{$v6_el}in:AVERAGE ";
-	$cmd .= "DEF:{$link['tag']}_{$v6_el}out=\"$rrdfile\":{$link['tag']}_{$v6_el}out:AVERAGE ";
-}
+$instack = array();
+$outstack = array();
+$tot_in_bits = "CDEF:tot_in_bits=0";
+$tot_out_bits = "CDEF:tot_out_bits=0";
+$firstLegend = true;
+$count = 0;
 
-if ($compat_rrdtool12) {
-	/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
+foreach ($asns as $as) {
+	$rrdfile = getRRDFileForAS($as, $peerusage);
+	if (!file_exists($rrdfile)) { continue; }
+	$count++;
+
+	$inDEF = array();
+	$outDEF = array();
+
 	foreach ($knownlinks as $link) {
-	   if ($outispositive) {
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}in_bits={$link['tag']}_{$v6_el}in,-8,* ";
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}out_bits={$link['tag']}_{$v6_el}out,8,* ";
-		} else {
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}in_bits={$link['tag']}_{$v6_el}in,8,* ";
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}out_bits={$link['tag']}_{$v6_el}out,-8,* ";
+		$inDEF[$link['tag'] . '_' . $v6_el] = "l" . crc32("{$link['tag']}_{$v6_el}_{$as}_in");
+		$outDEF[$link['tag'] . '_' . $v6_el] = "l" . crc32("{$link['tag']}_{$v6_el}_{$as}_out");
+	}
+
+	/* geneate RRD DEFs */
+	foreach ($knownlinks as $link) {
+		$data[] = "DEF:{$inDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}in:AVERAGE ";
+		$data[] = "DEF:{$outDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}out:AVERAGE ";
+	}
+
+	if ($compat_rrdtool12) {
+		/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
+		foreach ($knownlinks as $link) {
+		   if ($outispositive) {
+				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
+				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+			} else {
+				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
+			}
+		}
+	} else {
+		/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
+		foreach ($knownlinks as $link) {
+			$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+			$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+			$tot_in_bits .= ",{$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,ADDNAN";
+			$tot_out_bits .= ",{$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,ADDNAN";
+		}
+
+		foreach ($knownlinks as $link) {
+			if ($outispositive) {
+				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
+				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
+			} else {
+				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
+				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
+			}
 		}
 	}
-} else {
-	$tot_in_bits = "CDEF:tot_in_bits=0";
-	$tot_out_bits = "CDEF:tot_out_bits=0";
 
-	/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
+	/* generate graph area/stack for inbound */
 	foreach ($knownlinks as $link) {
-		$cmd .= "CDEF:{$link['tag']}_{$v6_el}in_bits_pos={$link['tag']}_{$v6_el}in,8,* ";
-		$cmd .= "CDEF:{$link['tag']}_{$v6_el}out_bits_pos={$link['tag']}_{$v6_el}out,8,* ";
-		$tot_in_bits .= ",{$link['tag']}_{$v6_el}in_bits_pos,ADDNAN";
-		$tot_out_bits .= ",{$link['tag']}_{$v6_el}out_bits_pos,ADDNAN";
+		if ($outispositive && $brighten_negative)
+			$col = $link['color'] . "BB";
+		else
+			$col = $link['color'];
+		if ($firstLegend) {
+			$descr = str_replace(':', '\:', $link['descr']); # Escaping colons in description
+		} else {
+			$descr = '';
+		}
+		$instack[] = "AREA:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:\"{$descr}\"";
+		if (count($instack) > 1)
+			$instack[] = ":STACK";
+		$instack[] = " ";
 	}
+	$firstLegend = false;
 
-	$cmd .= "$tot_in_bits ";
-	$cmd .= "$tot_out_bits ";
+	/* generate graph area/stack for outbound */
+	foreach ($knownlinks as $link) {
+		if ($outispositive || !$brighten_negative)
+			$col = $link['color'];
+		else
+			$col = $link['color'] . "BB";
+		$outstack[] = "AREA:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:";
+		if (count($outstack) > 1)
+			$outstack[] = ":STACK";
+		$outstack[] = " ";
+	}
+}
 
-	$cmd .= "VDEF:tot_in_bits_95th_pos=tot_in_bits,95,PERCENT ";
-	$cmd .= "VDEF:tot_out_bits_95th_pos=tot_out_bits,95,PERCENT ";
+if ($count > 0) {
+	$data[] = "$tot_in_bits ";
+	$data[] = "$tot_out_bits ";
+
+	$data[] = "VDEF:tot_in_bits_95th_pos=tot_in_bits,95,PERCENT ";
+	$data[] = "VDEF:tot_out_bits_95th_pos=tot_out_bits,95,PERCENT ";
 
 	if ($outispositive) {
-		$cmd .= "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,-1,* ";
-		$cmd .= "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,1,* ";
+	        $data[] = "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,-1,* ";
+	        $data[] = "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,1,* ";
 	} else {
-		$cmd .= "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,1,* ";
-		$cmd .= "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,-1,* ";
+	        $data[] = "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,1,* ";
+	        $data[] = "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,-1,* ";
 	}
 
-	foreach ($knownlinks as $link) {
-		if ($outispositive) {
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}in_bits={$link['tag']}_{$v6_el}in_bits_pos,-1,* ";
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}out_bits={$link['tag']}_{$v6_el}out_bits_pos,1,* ";
-		} else {
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}out_bits={$link['tag']}_{$v6_el}out_bits_pos,-1,* ";
-			$cmd .= "CDEF:{$link['tag']}_{$v6_el}in_bits={$link['tag']}_{$v6_el}in_bits_pos,1,* ";
-		}
+	foreach ($instack as $c) { $data[] = $c; }
+	foreach ($outstack as $c) { $data[] = $c; }
+
+	if ($show95th && !$compat_rrdtool12) {
+		$data[] = "LINE1:tot_in_bits_95th#FF0000 ";
+		$data[] = "LINE1:tot_out_bits_95th#FF0000 ";
+		$data[] = "GPRINT:tot_in_bits_95th_pos:'95th in %6.2lf%s' ";
+		$data[] = "GPRINT:tot_out_bits_95th_pos:'95th out %6.2lf%s' ";
 	}
-}
-
-/* generate graph area/stack for inbound */
-$i = 0;
-foreach ($knownlinks as $link) {
-	if ($outispositive && $brighten_negative)
-		$col = $link['color'] . "BB";
-	else
-		$col = $link['color'];
-	$descr = str_replace(':', '\:', $link['descr']); # Escaping colons in description
-	$cmd .= "AREA:{$link['tag']}_{$v6_el}in_bits#{$col}:\"{$descr}\"";
-	if ($i > 0)
-		$cmd .= ":STACK";
-	$cmd .= " ";
-	$i++;
-}
-
-/* generate graph area/stack for outbound */
-$i = 0;
-foreach ($knownlinks as $link) {
-	if ($outispositive || !$brighten_negative)
-		$col = $link['color'];
-	else
-		$col = $link['color'] . "BB";
-	$cmd .= "AREA:{$link['tag']}_{$v6_el}out_bits#{$col}:";
-	if ($i > 0)
-		$cmd .= ":STACK";
-	$cmd .= " ";
-	$i++;
-}
-
-if ($show95th && !$compat_rrdtool12) {
-	$cmd .= "LINE1:tot_in_bits_95th#FF0000 ";
-	$cmd .= "LINE1:tot_out_bits_95th#FF0000 ";
-	$cmd .= "GPRINT:tot_in_bits_95th_pos:'95th in %6.2lf%s' ";
-	$cmd .= "GPRINT:tot_out_bits_95th_pos:'95th out %6.2lf%s' ";
 }
 
 # zero line
-$cmd .= "HRULE:0#00000080";
+$data[] = "HRULE:0#00000080";
 
-passthru($cmd);
+// die('<pre>' . print_r($data, true));
+// die(implode("", $data));
+
+$descriptorspec = array(0 => array ("pipe", "r"),
+                        1 => array ("pipe", "w"),
+                        2 => array ("pipe", "w"),
+                       );
+
+$process = proc_open($rrdtool . ' - ', $descriptorspec, $pipes);
+fwrite($pipes[0], implode("", $data));
+fclose($pipes[0]);
+stream_set_timeout($pipes[1], 1);
+$stdout  = stream_get_contents($pipes[1]);
+stream_set_timeout($pipes[2], 1);
+$stderr = stream_get_contents($pipes[2]);
+fclose($pipes[1]);
+fclose($pipes[2]);
+proc_close($process);
+
+header("Content-Type: image/png");
+echo $stdout;
 
 exit;
 

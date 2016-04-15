@@ -58,7 +58,7 @@ if ( $action == "clearall" ) {
 					$as_other[]=$as;
 				endif;
 			endforeach;
-		
+
 		if ($as_other[0]) :
 ?>
 
@@ -82,8 +82,14 @@ if ( $action == "clearall" ) {
 
 <table class="astable">
 <?php
-		foreach( $as_num as $as ): 
-			$asinfo = getASInfo($as);$class = (($i % 2) == 0) ? "even" : "odd";
+		array_unshift($as_num, $asset);
+		foreach( $as_num as $as ):
+			if ($as == $asset) {
+				$asinfo = array('name' => "$asset", 'descr' => "AS-SET: $asset", 'country' => '');
+			} else {
+				$asinfo = getASInfo($as);
+			}
+			$class = (($i % 2) == 0) ? "even" : "odd";
 ?>
 <tr class="<?php echo $class; ?>">
 	<th>
@@ -95,7 +101,11 @@ if ( $action == "clearall" ) {
 			?>
 			<img src="<?php echo $flagfile; ?>" <?php echo $is[3]; ?>>
 			<?php endif; ?>
+			<?php if ($as == $asset) { ?>
+			<?php echo $asinfo['descr']; ?>
+			<?php } else { ?>
 			AS<?php echo $as; ?>: <?php echo $asinfo['descr']; ?>
+			<?php } ?>
 		</div>
 
 <?php if (!empty($customlinks)): ?>
@@ -112,19 +122,22 @@ echo join(" | ", $htmllinks);
 <?php endif; ?>
 
 		<div class="rank">
-			#<?php echo ($i+1); ?>
+			<?php echo ($i > 0) ? '#' . $i : ''; ?>
 		 </div>
 	</th>
 	<td>
 		<?php 
 			$rrdfile = getRRDFileForAS($as);
-			
-			if (file_exists($rrdfile)): ?>
+
+			$title = ($as == $asset) ? $asinfo['descr'] : "AS" . $as . " - " . $asinfo['descr'];
+			$astype = ($as == $asset) ? 'asset' : 'as';
+
+			if (file_exists($rrdfile) || $as == $asset): ?>
 				<?php if ($showv6): ?>
-					<a href="history.php?as=<?php echo $as; ?>" target="_blank"><img alt="AS graph" src="gengraph.php?as=<?php echo $as; ?>&amp;width=<?php echo $asset_graph_width ?>&amp;height=<?php echo $asset_graph_height ?>&amp;v=4&amp;nolegend=1&amp;dname=<?php echo rawurlencode("AS" . $as . " - " . $asinfo['descr'] . " - IPV4"); ?>" width="<?php echo $asset_graph_width ?>" height="<?php echo $asset_graph_height ?>" border="0" /></a>
-					<a href="history.php?as=<?php echo $as; ?>" target="_blank"><img alt="AS graph" src="gengraph.php?as=<?php echo $as; ?>&amp;width=<?php echo $asset_graph_width ?>&amp;height=<?php echo $asset_graph_height ?>&amp;v=6&amp;nolegend=1&amp;dname=<?php echo rawurlencode("AS" . $as . " - " . $asinfo['descr'] . " - IPV6"); ?>" width="<?php echo $asset_graph_width ?>" height="<?php echo $asset_graph_height ?>" border="0" /></a>
+					<a href="history.php?<?php echo $astype; ?>=<?php echo $as; ?>" target="_blank"><img alt="AS graph" src="gengraph.php?<?php echo $astype; ?>=<?php echo $as; ?>&amp;width=<?php echo $asset_graph_width ?>&amp;height=<?php echo $asset_graph_height ?>&amp;v=4&amp;nolegend=1&amp;dname=<?php echo rawurlencode($title . " - IPV4"); ?>" width="<?php echo $asset_graph_width ?>" height="<?php echo $asset_graph_height ?>" border="0" /></a>
+					<a href="history.php?<?php echo $astype; ?>=<?php echo $as; ?>" target="_blank"><img alt="AS graph" src="gengraph.php?<?php echo $astype; ?>=<?php echo $as; ?>&amp;width=<?php echo $asset_graph_width ?>&amp;height=<?php echo $asset_graph_height ?>&amp;v=6&amp;nolegend=1&amp;dname=<?php echo rawurlencode($title . " - IPV6"); ?>" width="<?php echo $asset_graph_width ?>" height="<?php echo $asset_graph_height ?>" border="0" /></a>
 				<?php else: ?>
-					<a href="history.php?as=<?php echo $as; ?>" target="_blank"><img alt="AS graph" src="gengraph.php?as=<?php echo $as; ?>&amp;width=<?php echo $asset_graph_width ?>&amp;height=<?php echo $asset_graph_height ?>&amp;v=4&amp;nolegend=1&amp;dname=<?php echo rawurlencode("AS" . $as . " - " . $asinfo['descr'] . ""); ?>" width="<?php echo $asset_graph_width ?>" height="<?php echo $asset_graph_height ?>" border="0" /></a>
+					<a href="history.php?<?php echo $astype; ?>=<?php echo $as; ?>" target="_blank"><img alt="AS graph" src="gengraph.php?<?php echo $astype; ?>=<?php echo $as; ?>&amp;width=<?php echo $asset_graph_width ?>&amp;height=<?php echo $asset_graph_height ?>&amp;v=4&amp;nolegend=1&amp;dname=<?php echo rawurlencode($title); ?>" width="<?php echo $asset_graph_width ?>" height="<?php echo $asset_graph_height ?>" border="0" /></a>
 				<?php endif; ?>
 			<?php else: ?>
 				<p><center>No data found for AS<?php echo $as; ?></center></p>
