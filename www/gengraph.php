@@ -55,42 +55,41 @@ if ($compat_rrdtool12) {
 		$width -= 16;
 }
 
-$data = array();
-$data[] = "graph - " .
+$data = "graph - " .
 	"--slope-mode --alt-autoscale -u 0 -l 0 --imgformat=PNG --base=1000 --height=$height --width=$width " .
 	"--color BACK#ffffff00 --color SHADEA#ffffff00 --color SHADEB#ffffff00 ";
 
 if (!$compat_rrdtool12)
-	$data[] = "--full-size-mode ";
+	$data .= "--full-size-mode ";
 
 if ($vertical_label) {
 	if($outispositive)
-		$data[] = "--vertical-label '<- IN | OUT ->' ";
+		$data .= "--vertical-label '<- IN | OUT ->' ";
 	else
-		$data[] = "--vertical-label '<- OUT | IN ->' ";
+		$data .= "--vertical-label '<- OUT | IN ->' ";
 }
 
 if($showtitledetail && @$_GET['dname'] != "")
-	$data[] = "--title " . escapeshellarg($_GET['dname']) . " ";
+	$data .= "--title " . escapeshellarg($_GET['dname']) . " ";
 else
 	if (isset($_GET['v']) && is_numeric($_GET['v']))
-		$data[] = "--title IPv" . $_GET['v'] . " ";
+		$data .= "--title IPv" . $_GET['v'] . " ";
 
 if (isset($_GET['nolegend']))
-	$data[] = "--no-legend ";
+	$data .= "--no-legend ";
 
 if (isset($_GET['start']) && is_numeric($_GET['start']))
-	$data[] = "--start " . $_GET['start'] . " ";
+	$data .= "--start " . $_GET['start'] . " ";
 
 if (isset($_GET['end']) && is_numeric($_GET['end']))
-	$data[] = "--end " . $_GET['end'] . " ";
+	$data .= "--end " . $_GET['end'] . " ";
 
-$instack = array();
-$outstack = array();
+$instack = '';
+$outstack = '';
 $tot_in_bits = "CDEF:tot_in_bits=0";
 $tot_out_bits = "CDEF:tot_out_bits=0";
 $firstLegend = true;
-$count = 0;
+$inArea = $outArea = $count = 0;
 
 foreach ($asns as $as) {
 	$rrdfile = getRRDFileForAS($as, $peerusage);
@@ -107,37 +106,37 @@ foreach ($asns as $as) {
 
 	/* geneate RRD DEFs */
 	foreach ($knownlinks as $link) {
-		$data[] = "DEF:{$inDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}in:AVERAGE ";
-		$data[] = "DEF:{$outDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}out:AVERAGE ";
+		$data .= "DEF:{$inDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}in:AVERAGE ";
+		$data .= "DEF:{$outDEF[$link['tag'] . '_' . $v6_el]}=\"$rrdfile\":{$link['tag']}_{$v6_el}out:AVERAGE ";
 	}
 
 	if ($compat_rrdtool12) {
 		/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
 		foreach ($knownlinks as $link) {
 		   if ($outispositive) {
-				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
-				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
 			} else {
-				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
-				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]},-8,* ";
 			}
 		}
 	} else {
 		/* generate a CDEF for each DEF to multiply by 8 (bytes to bits), and reverse for outbound */
 		foreach ($knownlinks as $link) {
-			$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
-			$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+			$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$inDEF[$link['tag'] . '_' . $v6_el]},8,* ";
+			$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos={$outDEF[$link['tag'] . '_' . $v6_el]},8,* ";
 			$tot_in_bits .= ",{$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,ADDNAN";
 			$tot_out_bits .= ",{$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,ADDNAN";
 		}
 
 		foreach ($knownlinks as $link) {
 			if ($outispositive) {
-				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
-				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
 			} else {
-				$data[] = "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
-				$data[] = "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
+				$data .= "CDEF:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits={$outDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,-1,* ";
+				$data .= "CDEF:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits={$inDEF[$link['tag'] . '_' . $v6_el]}_bits_pos,1,* ";
 			}
 		}
 	}
@@ -153,10 +152,10 @@ foreach ($asns as $as) {
 		} else {
 			$descr = '';
 		}
-		$instack[] = "AREA:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:\"{$descr}\"";
-		if (count($instack) > 1)
-			$instack[] = ":STACK";
-		$instack[] = " ";
+		$instack .= "AREA:{$inDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:\"{$descr}\"";
+		if ($inArea++ > 0)
+			$instack .= ":STACK";
+		$instack .= " ";
 	}
 	$firstLegend = false;
 
@@ -166,55 +165,48 @@ foreach ($asns as $as) {
 			$col = $link['color'];
 		else
 			$col = $link['color'] . "BB";
-		$outstack[] = "AREA:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:";
-		if (count($outstack) > 1)
-			$outstack[] = ":STACK";
-		$outstack[] = " ";
+		$outstack .= "AREA:{$outDEF[$link['tag'] . '_' . $v6_el]}_bits#{$col}:";
+		if ($outArea++ > 0)
+			$outstack .= ":STACK";
+		$outstack .= " ";
 	}
 }
 
 if ($count > 0) {
-	$data[] = "$tot_in_bits ";
-	$data[] = "$tot_out_bits ";
+	$data .= "$tot_in_bits ";
+	$data .= "$tot_out_bits ";
 
-	$data[] = "VDEF:tot_in_bits_95th_pos=tot_in_bits,95,PERCENT ";
-	$data[] = "VDEF:tot_out_bits_95th_pos=tot_out_bits,95,PERCENT ";
+	$data .= "VDEF:tot_in_bits_95th_pos=tot_in_bits,95,PERCENT ";
+	$data .= "VDEF:tot_out_bits_95th_pos=tot_out_bits,95,PERCENT ";
 
 	if ($outispositive) {
-	        $data[] = "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,-1,* ";
-	        $data[] = "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,1,* ";
+	        $data .= "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,-1,* ";
+	        $data .= "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,1,* ";
 	} else {
-	        $data[] = "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,1,* ";
-	        $data[] = "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,-1,* ";
+	        $data .= "CDEF:tot_in_bits_95th=tot_in_bits,POP,tot_in_bits_95th_pos,1,* ";
+	        $data .= "CDEF:tot_out_bits_95th=tot_out_bits,POP,tot_out_bits_95th_pos,-1,* ";
 	}
 
-	foreach ($instack as $c) { $data[] = $c; }
-	foreach ($outstack as $c) { $data[] = $c; }
+	$data .= $instack;
+	$data .= $outstack;
 
 	if ($show95th && !$compat_rrdtool12) {
-		$data[] = "LINE1:tot_in_bits_95th#FF0000 ";
-		$data[] = "LINE1:tot_out_bits_95th#FF0000 ";
-		$data[] = "GPRINT:tot_in_bits_95th_pos:'95th in %6.2lf%s' ";
-		$data[] = "GPRINT:tot_out_bits_95th_pos:'95th out %6.2lf%s' ";
+		$data .= "LINE1:tot_in_bits_95th#FF0000 ";
+		$data .= "LINE1:tot_out_bits_95th#FF0000 ";
+		$data .= "GPRINT:tot_in_bits_95th_pos:'95th in %6.2lf%s' ";
+		$data .= "GPRINT:tot_out_bits_95th_pos:'95th out %6.2lf%s' ";
 	}
 }
 
 # zero line
-$data[] = "HRULE:0#00000080";
+$data .= "HRULE:0#00000080";
 
-// die('<pre>' . print_r($data, true));
-// die(implode("", $data));
-
-$descriptorspec = array(0 => array ("pipe", "r"),
-                        1 => array ("pipe", "w"),
-                        2 => array ("pipe", "w"),
-                       );
-
+$descriptorspec = array(0 => array('pipe', 'r'), 1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
 $process = proc_open($rrdtool . ' - ', $descriptorspec, $pipes);
-fwrite($pipes[0], implode("", $data));
+fwrite($pipes[0], $data);
 fclose($pipes[0]);
 stream_set_timeout($pipes[1], 1);
-$stdout  = stream_get_contents($pipes[1]);
+$stdout = stream_get_contents($pipes[1]);
 stream_set_timeout($pipes[2], 1);
 $stderr = stream_get_contents($pipes[2]);
 fclose($pipes[1]);
