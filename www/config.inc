@@ -13,6 +13,7 @@ $asinfofile = "asinfo.txt";
 $knownlinksfile = "/data/as-stats/conf/knownlinks";
 $outispositive = true;
 $show95th = true;
+$alwaysShow95th = true;
 
 $ntop = 20;
 $showv6 = true;

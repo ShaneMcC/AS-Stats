@@ -75,7 +75,7 @@ else
 	if (isset($_GET['v']) && is_numeric($_GET['v']))
 		$data .= "--title IPv" . $_GET['v'] . " ";
 
-if (isset($_GET['nolegend']))
+if (!$alwaysShow95th)
 	$data .= "--no-legend ";
 
 if (isset($_GET['start']) && is_numeric($_GET['start']))
@@ -151,7 +151,7 @@ foreach ($knownlinks as $link) {
 			$col = $link['color'] . "BB";
 		else
 			$col = $link['color'];
-		if (!isset($hasLegend[$link['descr']])) {
+		if (!isset($_GET['nolegend']) && !isset($hasLegend[$link['descr']])) {
 			$descr = str_replace(':', '\:', $link['descr']); # Escaping colons in description
 			$hasLegend[$link['descr']] = true;
 		} else {

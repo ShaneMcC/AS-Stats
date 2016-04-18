@@ -22,6 +22,7 @@ $asset_graph_height = 200;
 $vertical_label = true;			# vertical IN/OUT label in graph
 $brighten_negative = true;		# brighten the "negative" part of graphs
 $showpeeras = false;
+$alwaysShow95th = true;
 
 /* Time intervals for top N AS */
 $top_intervals = array(
